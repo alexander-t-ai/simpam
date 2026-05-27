@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPAM</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding-top: 1.5rem; }
+    .available-ips-row td { background: #f8f9fa; font-size: 0.875rem; }
+    .badge-family { font-size: 0.75rem; }
+    .table th { white-space: nowrap; }
+    .action-btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+<div class="container-fluid">
+  <h4 class="mb-3">IPAM</h4>
+
+  <div id="alert-area"></div>
+
+  <ul class="nav nav-tabs mb-3" id="mainTabs">
+    <li class="nav-item">
+      <a class="nav-link active" href="#" data-tab="prefixes">Prefixes</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" data-tab="addresses">IP Addresses</a>
+    </li>
+  </ul>
+
+  <!-- ── Prefixes tab ── -->
+  <div id="tab-prefixes">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span id="prefix-count" class="text-muted small"></span>
+      <button class="btn btn-sm btn-primary" onclick="openNewPrefixModal()">+ New Prefix</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th><th>Prefix</th><th>Family</th><th>Status</th>
+            <th>Role</th><th>Description</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="prefix-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── IP Addresses tab ── -->
+  <div id="tab-addresses" style="display:none">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span id="address-count" class="text-muted small"></span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>ID</th><th>Address</th><th>Family</th><th>Status</th>
+            <th>Role</th><th>DNS Name</th><th>Description</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="address-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── New Prefix Modal ── -->
+<div class="modal fade" id="newPrefixModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New Prefix</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Prefix <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="new-prefix" placeholder="e.g. 10.0.0.0/8">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="new-status">
+            <option value="active">Active</option>
+            <option value="reserved">Reserved</option>
+            <option value="deprecated">Deprecated</option>
+            <option value="container">Container</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Role</label>
+          <input type="text" class="form-control" id="new-role" placeholder="optional">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="new-description" placeholder="optional">
+        </div>
+        <div id="modal-error" class="text-danger small" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="createPrefix()">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API = '/api/v1/ipam';
+let prefixModal = null;
+const expandedRows = new Set();
+
+// ── Tab switching ──────────────────────────────────────────────
+document.querySelectorAll('[data-tab]').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('active'));
+    link.classList.add('active');
+    document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+    document.getElementById('tab-' + link.dataset.tab).style.display = '';
+  });
+});
+
+// ── Error/success banner ───────────────────────────────────────
+function showAlert(msg, type = 'danger') {
+  const area = document.getElementById('alert-area');
+  area.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show py-2" role="alert">
+    ${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+  if (type === 'success') setTimeout(() => area.innerHTML = '', 3000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function statusBadge(status) {
+  const colors = { active:'success', reserved:'warning', deprecated:'secondary',
+                   container:'info', dhcp:'primary', slaac:'primary' };
+  return `<span class="badge bg-${colors[status.value] ?? 'secondary'}">${status.label}</span>`;
+}
+
+function familyBadge(family) {
+  return `<span class="badge bg-light text-dark border badge-family">${family.label}</span>`;
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (res.status === 204) return null;
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+// ── Prefixes ──────────────────────────────────────────────────
+async function loadPrefixes() {
+  try {
+    const data = await apiFetch(`${API}/prefixes/`);
+    document.getElementById('prefix-count').textContent = `${data.count} prefix${data.count !== 1 ? 'es' : ''}`;
+    const tbody = document.getElementById('prefix-tbody');
+    tbody.innerHTML = '';
+    data.results.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.id = `prefix-row-${p.id}`;
+      tr.innerHTML = `
+        <td>${p.id}</td>
+        <td><code>${p.prefix}</code></td>
+        <td>${familyBadge(p.family)}</td>
+        <td>${statusBadge(p.status)}</td>
+        <td>${p.role ?? ''}</td>
+        <td>${p.description}</td>
+        <td>
+          <button class="btn btn-outline-info action-btn me-1"
+            onclick="toggleAvailableIPs(${p.id}, '${p.prefix}')">Available IPs</button>
+          <button class="btn btn-outline-success action-btn me-1"
+            onclick="allocateIP(${p.id})">Allocate IP</button>
+          <button class="btn btn-outline-danger action-btn"
+            onclick="deletePrefix(${p.id})">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+      if (expandedRows.has(p.id)) {
+        insertAvailableIPsRow(p.id, p.prefix);
+      }
+    });
+  } catch (e) {
+    showAlert('Failed to load prefixes: ' + e.message);
+  }
+}
+
+async function toggleAvailableIPs(prefixId, prefix) {
+  const existingRow = document.getElementById(`avail-row-${prefixId}`);
+  if (existingRow) {
+    existingRow.remove();
+    expandedRows.delete(prefixId);
+    return;
+  }
+  expandedRows.add(prefixId);
+  await insertAvailableIPsRow(prefixId, prefix);
+}
+
+async function insertAvailableIPsRow(prefixId, prefix) {
+  const anchorRow = document.getElementById(`prefix-row-${prefixId}`);
+  if (!anchorRow) return;
+  let ips;
+  try {
+    ips = await apiFetch(`${API}/prefixes/${prefixId}/available-ips/`);
+  } catch (e) {
+    showAlert('Failed to load available IPs: ' + e.message);
+    return;
+  }
+  const tr = document.createElement('tr');
+  tr.id = `avail-row-${prefixId}`;
+  tr.className = 'available-ips-row';
+  const content = ips.length
+    ? ips.map(ip => `<code>${ip.address}</code>`).join(' &nbsp; ')
+    : '<em class="text-muted">No available IPs</em>';
+  tr.innerHTML = `<td colspan="7"><strong>Available in ${prefix}:</strong> ${content}</td>`;
+  anchorRow.after(tr);
+}
+
+async function allocateIP(prefixId) {
+  try {
+    const ip = await apiFetch(`${API}/prefixes/${prefixId}/available-ips/`, { method: 'POST' });
+    showAlert(`Allocated ${ip.address}`, 'success');
+    await loadPrefixes();
+    await loadAddresses();
+  } catch (e) {
+    showAlert('Failed to allocate IP: ' + e.message);
+  }
+}
+
+async function deletePrefix(prefixId) {
+  if (!confirm('Delete this prefix?')) return;
+  try {
+    await apiFetch(`${API}/prefixes/${prefixId}/`, { method: 'DELETE' });
+    expandedRows.delete(prefixId);
+    await loadPrefixes();
+  } catch (e) {
+    showAlert('Failed to delete prefix: ' + e.message);
+  }
+}
+
+function openNewPrefixModal() {
+  document.getElementById('new-prefix').value = '';
+  document.getElementById('new-status').value = 'active';
+  document.getElementById('new-role').value = '';
+  document.getElementById('new-description').value = '';
+  document.getElementById('modal-error').style.display = 'none';
+  prefixModal.show();
+}
+
+async function createPrefix() {
+  const prefix = document.getElementById('new-prefix').value.trim();
+  if (!prefix) {
+    document.getElementById('modal-error').textContent = 'Prefix is required.';
+    document.getElementById('modal-error').style.display = '';
+    return;
+  }
+  const body = {
+    prefix,
+    status: document.getElementById('new-status').value,
+    role: document.getElementById('new-role').value || null,
+    description: document.getElementById('new-description').value || null,
+  };
+  try {
+    await apiFetch(`${API}/prefixes/`, { method: 'POST', body: JSON.stringify(body) });
+    prefixModal.hide();
+    await loadPrefixes();
+    showAlert(`Created ${prefix}`, 'success');
+  } catch (e) {
+    document.getElementById('modal-error').textContent = e.message;
+    document.getElementById('modal-error').style.display = '';
+  }
+}
+
+// ── IP Addresses ──────────────────────────────────────────────
+async function loadAddresses() {
+  try {
+    const data = await apiFetch(`${API}/ip-addresses/`);
+    document.getElementById('address-count').textContent = `${data.count} address${data.count !== 1 ? 'es' : ''}`;
+    const tbody = document.getElementById('address-tbody');
+    tbody.innerHTML = '';
+    data.results.forEach(ip => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${ip.id}</td>
+        <td><code>${ip.address}</code></td>
+        <td>${familyBadge(ip.family)}</td>
+        <td>${statusBadge(ip.status)}</td>
+        <td>${ip.role ?? ''}</td>
+        <td>${ip.dns_name}</td>
+        <td>${ip.description}</td>
+        <td>
+          <button class="btn btn-outline-danger action-btn"
+            onclick="deleteAddress(${ip.id}, '${ip.address}')">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    showAlert('Failed to load IP addresses: ' + e.message);
+  }
+}
+
+async function deleteAddress(ipId, address) {
+  if (!confirm(`Delete ${address}?`)) return;
+  try {
+    await apiFetch(`${API}/ip-addresses/${ipId}/`, { method: 'DELETE' });
+    await loadAddresses();
+    await loadPrefixes();
+  } catch (e) {
+    showAlert('Failed to delete IP address: ' + e.message);
+  }
+}
+
+// ── Bootstrap enter-key on modal ──────────────────────────────
+document.getElementById('new-prefix').addEventListener('keydown', e => {
+  if (e.key === 'Enter') createPrefix();
+});
+
+// ── Init ──────────────────────────────────────────────────────
+prefixModal = new bootstrap.Modal(document.getElementById('newPrefixModal'));
+loadPrefixes();
+loadAddresses();
+</script>
+</body>
+</html>
