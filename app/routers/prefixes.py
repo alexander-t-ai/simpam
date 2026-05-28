@@ -77,4 +77,6 @@ def allocate_prefix(
     payload: AvailablePrefixRequest,
     service: PrefixService = Depends(get_prefix_service),
 ):
-    return PrefixResponse.from_orm_obj(service.allocate_prefix(prefix_id, payload.prefix_length))
+    return PrefixResponse.from_orm_obj(
+        service.allocate_prefix(prefix_id, payload.prefix_length, payload.status, payload.description)
+    )

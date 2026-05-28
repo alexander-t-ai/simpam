@@ -182,7 +182,44 @@ def test_allocate_child_prefix():
 
 
 # ---------------------------------------------------------------------------
-# Test 8: Get prefix by ID
+# Test 8: Allocate child prefix with status and description
+# ---------------------------------------------------------------------------
+
+def test_allocate_child_prefix_with_status_and_description():
+    parent = create_prefix("10.100.0.0/16")
+    prefix_id = parent["id"]
+
+    alloc = requests.post(
+        f"{PREFIXES_URL}/{prefix_id}/available-prefixes/",
+        json={"prefix_length": 24, "status": "reserved", "description": "test subnet"},
+    )
+    assert alloc.status_code == 201
+    child = alloc.json()
+    assert child["prefix"] == "10.100.0.0/24"
+    assert child["status"]["value"] == "reserved"
+    assert child["description"] == "test subnet"
+
+
+def test_allocate_child_prefix_length_too_small():
+    parent = create_prefix("10.101.0.0/24")
+    resp = requests.post(
+        f"{PREFIXES_URL}/{parent['id']}/available-prefixes/",
+        json={"prefix_length": 16},
+    )
+    assert resp.status_code == 400
+
+
+def test_allocate_child_prefix_length_too_large():
+    parent = create_prefix("10.102.0.0/24")
+    resp = requests.post(
+        f"{PREFIXES_URL}/{parent['id']}/available-prefixes/",
+        json={"prefix_length": 33},
+    )
+    assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Get prefix by ID
 # ---------------------------------------------------------------------------
 
 def test_get_prefix_by_id():

@@ -93,7 +93,7 @@ class PrefixService:
         net = netaddr.IPNetwork(obj.prefix)
         return net, _available_subnets(net, self._child_prefixes(net))
 
-    def allocate_prefix(self, prefix_id: int, prefix_length: int) -> Prefix:
+    def allocate_prefix(self, prefix_id: int, prefix_length: int, status: str = "active", description: str | None = None) -> Prefix:
         obj = self.get_prefix(prefix_id)
         net = netaddr.IPNetwork(obj.prefix)
 
@@ -117,7 +117,7 @@ class PrefixService:
         if chosen is None:
             raise HTTPException(status_code=409, detail="No available prefix of requested size")
 
-        new_prefix = Prefix(prefix=str(chosen.cidr), family=net.version, status="active")
+        new_prefix = Prefix(prefix=str(chosen.cidr), family=net.version, status=status, description=description)
         try:
             self.db.add(new_prefix)
             self.db.commit()

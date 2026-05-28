@@ -125,6 +125,8 @@ class AvailablePrefix(BaseModel):
 
 class AvailablePrefixRequest(BaseModel):
     prefix_length: int
+    status: str = "active"
+    description: str | None = None
 
 
 # ---------------------------------------------------------------------------
