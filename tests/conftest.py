@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://localhost:8000/api"
 IPAM_URL = f"{BASE_URL}/ipam"
 
 

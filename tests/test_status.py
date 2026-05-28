@@ -1,7 +1,7 @@
 """Integration tests for the status endpoint."""
 import requests
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://localhost:8000/api"
 
 
 def test_status():

@@ -31,8 +31,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
-IPAM_PREFIX = "/api/v1/ipam"
-RESET_PREFIX = "/api/v1"
+IPAM_PREFIX = "/api/ipam"
+RESET_PREFIX = "/api"
 
 app.include_router(prefixes.router, prefix=IPAM_PREFIX)
 app.include_router(ip_addresses.router, prefix=IPAM_PREFIX)
@@ -40,7 +40,17 @@ app.include_router(roles.router, prefix=IPAM_PREFIX)
 app.include_router(reset.router, prefix=RESET_PREFIX)
 
 
-@app.get("/api/v1/status/", include_in_schema=False)
+@app.get("/api/ipam/", include_in_schema=False)
+def ipam_root(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return JSONResponse({
+        "roles": f"{base}/api/ipam/roles/",
+        "ip-addresses": f"{base}/api/ipam/ip-addresses/",
+        "prefixes": f"{base}/api/ipam/prefixes/",
+    })
+
+
+@app.get("/api/status/", include_in_schema=False)
 def status():
     return JSONResponse({"netbox-version": "Simpam 67"})
 

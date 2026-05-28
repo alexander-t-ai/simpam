@@ -1,7 +1,7 @@
 """Integration tests for IP address endpoints."""
 import requests
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://localhost:8000/api"
 IPAM_URL = f"{BASE_URL}/ipam"
 IPS_URL = f"{IPAM_URL}/ip-addresses"
 PREFIXES_URL = f"{IPAM_URL}/prefixes"

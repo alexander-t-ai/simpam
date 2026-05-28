@@ -1,7 +1,7 @@
 """Integration tests for prefix endpoints."""
 import requests
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://localhost:8000/api"
 IPAM_URL = f"{BASE_URL}/ipam"
 PREFIXES_URL = f"{IPAM_URL}/prefixes"
 ROLES_URL = f"{IPAM_URL}/roles"

@@ -1,7 +1,7 @@
 """Integration tests for roles endpoints."""
 import requests
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://localhost:8000/api"
 ROLES_URL = f"{BASE_URL}/ipam/roles"
 
 
