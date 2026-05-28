@@ -121,6 +121,35 @@
   </div>
 </div>
 
+<!-- ── Prefix Detail Modal ── -->
+<div class="modal fade" id="prefixDetailModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Prefix Detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-sm table-borderless mb-0">
+          <tbody>
+            <tr><th style="width:35%">ID</th><td id="detail-id"></td></tr>
+            <tr><th>Prefix</th><td id="detail-prefix"></td></tr>
+            <tr><th>Family</th><td id="detail-family"></td></tr>
+            <tr><th>Status</th><td id="detail-status"></td></tr>
+            <tr><th>Role</th><td id="detail-role"></td></tr>
+            <tr><th>Description</th><td id="detail-description"></td></tr>
+            <tr><th>Created</th><td id="detail-created"></td></tr>
+            <tr><th>Last Updated</th><td id="detail-last-updated"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── New Role Modal ── -->
 <div class="modal fade" id="newRoleModal" tabindex="-1">
   <div class="modal-dialog modal-sm">
@@ -149,6 +178,7 @@
 const API = '/api/ipam';
 let prefixModal = null;
 let roleModal = null;
+let prefixDetailModal = null;
 const expandedRows = new Set();
 
 // ── Tab switching ──────────────────────────────────────────────
@@ -259,7 +289,7 @@ async function loadPrefixes() {
       const tr = document.createElement('tr');
       tr.id = `prefix-row-${p.id}`;
       tr.innerHTML = `
-        <td>${p.id}</td>
+        <td><a href="#" onclick="showPrefixDetail(${p.id}); return false;">${p.id}</a></td>
         <td><code>${p.prefix}</code></td>
         <td>${familyBadge(p.family)}</td>
         <td>${statusBadge(p.status)}</td>
@@ -394,6 +424,23 @@ async function deleteAddress(ipId, address) {
   } catch (e) { showAlert('Failed to delete IP address: ' + e.message); }
 }
 
+// ── Prefix detail ─────────────────────────────────────────────
+async function showPrefixDetail(prefixId) {
+  try {
+    const p = await apiFetch(`${API}/prefixes/${prefixId}/`);
+    document.getElementById('detail-id').textContent = p.id;
+    document.getElementById('detail-prefix').innerHTML = `<code>${p.prefix}</code>`;
+    document.getElementById('detail-family').innerHTML = familyBadge(p.family);
+    document.getElementById('detail-status').innerHTML = statusBadge(p.status);
+    document.getElementById('detail-role').innerHTML =
+      p.role ? `<span class="badge bg-secondary">${p.role.name}</span>` : '—';
+    document.getElementById('detail-description').textContent = p.description || '—';
+    document.getElementById('detail-created').textContent = new Date(p.created).toLocaleString();
+    document.getElementById('detail-last-updated').textContent = new Date(p.last_updated).toLocaleString();
+    prefixDetailModal.show();
+  } catch (e) { showAlert('Failed to load prefix detail: ' + e.message); }
+}
+
 // ── Enter-key shortcuts ────────────────────────────────────────
 document.getElementById('new-prefix').addEventListener('keydown', e => {
   if (e.key === 'Enter') createPrefix();
@@ -403,8 +450,9 @@ document.getElementById('new-role-name').addEventListener('keydown', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────
-prefixModal = new bootstrap.Modal(document.getElementById('newPrefixModal'));
-roleModal   = new bootstrap.Modal(document.getElementById('newRoleModal'));
+prefixModal       = new bootstrap.Modal(document.getElementById('newPrefixModal'));
+roleModal         = new bootstrap.Modal(document.getElementById('newRoleModal'));
+prefixDetailModal = new bootstrap.Modal(document.getElementById('prefixDetailModal'));
 loadPrefixes();
 loadAddresses();
 loadRoles();

@@ -182,7 +182,28 @@ def test_allocate_child_prefix():
 
 
 # ---------------------------------------------------------------------------
-# Test 8: Filter by nonexistent role returns 400
+# Test 8: Get prefix by ID
+# ---------------------------------------------------------------------------
+
+def test_get_prefix_by_id():
+    created = create_prefix("10.50.0.0/24")
+    resp = requests.get(f"{PREFIXES_URL}/{created['id']}/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == created["id"]
+    assert data["prefix"] == "10.50.0.0/24"
+    assert data["family"]["value"] == 4
+    assert data["status"]["value"] == "active"
+    assert data["role"] is None
+
+
+def test_get_nonexistent_prefix_returns_404():
+    resp = requests.get(f"{PREFIXES_URL}/99999/")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Filter by nonexistent role returns 400
 # ---------------------------------------------------------------------------
 
 def test_filter_by_nonexistent_role():
