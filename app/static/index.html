@@ -20,12 +20,9 @@
   <div id="alert-area"></div>
 
   <ul class="nav nav-tabs mb-3" id="mainTabs">
-    <li class="nav-item">
-      <a class="nav-link active" href="#" data-tab="prefixes">Prefixes</a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" href="#" data-tab="addresses">IP Addresses</a>
-    </li>
+    <li class="nav-item"><a class="nav-link active" href="#" data-tab="prefixes">Prefixes</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="addresses">IP Addresses</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" data-tab="roles">Roles</a></li>
   </ul>
 
   <!-- ── Prefixes tab ── -->
@@ -64,6 +61,22 @@
       </table>
     </div>
   </div>
+
+  <!-- ── Roles tab ── -->
+  <div id="tab-roles" style="display:none">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span id="role-count" class="text-muted small"></span>
+      <button class="btn btn-sm btn-primary" onclick="openNewRoleModal()">+ New Role</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered table-hover align-middle">
+        <thead class="table-light">
+          <tr><th>ID</th><th>Name</th></tr>
+        </thead>
+        <tbody id="role-tbody"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ── New Prefix Modal ── -->
@@ -90,7 +103,9 @@
         </div>
         <div class="mb-3">
           <label class="form-label">Role</label>
-          <input type="text" class="form-control" id="new-role" placeholder="optional">
+          <select class="form-select" id="new-role-id">
+            <option value="">— none —</option>
+          </select>
         </div>
         <div class="mb-3">
           <label class="form-label">Description</label>
@@ -106,10 +121,34 @@
   </div>
 </div>
 
+<!-- ── New Role Modal ── -->
+<div class="modal fade" id="newRoleModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New Role</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="new-role-name" placeholder="e.g. management">
+        </div>
+        <div id="role-modal-error" class="text-danger small" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="createRole()">Create</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const API = '/api/v1/ipam';
 let prefixModal = null;
+let roleModal = null;
 const expandedRows = new Set();
 
 // ── Tab switching ──────────────────────────────────────────────
@@ -150,11 +189,70 @@ async function apiFetch(path, opts = {}) {
   return body;
 }
 
+// ── Roles ─────────────────────────────────────────────────────
+async function loadRoles() {
+  try {
+    const roles = await apiFetch(`${API}/roles/`);
+    document.getElementById('role-count').textContent =
+      `${roles.length} role${roles.length !== 1 ? 's' : ''}`;
+
+    const tbody = document.getElementById('role-tbody');
+    tbody.innerHTML = '';
+    roles.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.id}</td><td>${r.name}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    // Populate role dropdown in prefix modal
+    const sel = document.getElementById('new-role-id');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— none —</option>';
+    roles.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = r.name;
+      if (String(r.id) === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
+    return roles;
+  } catch (e) {
+    showAlert('Failed to load roles: ' + e.message);
+    return [];
+  }
+}
+
+function openNewRoleModal() {
+  document.getElementById('new-role-name').value = '';
+  document.getElementById('role-modal-error').style.display = 'none';
+  roleModal.show();
+}
+
+async function createRole() {
+  const name = document.getElementById('new-role-name').value.trim();
+  if (!name) {
+    document.getElementById('role-modal-error').textContent = 'Name is required.';
+    document.getElementById('role-modal-error').style.display = '';
+    return;
+  }
+  try {
+    await apiFetch(`${API}/roles/`, { method: 'POST', body: JSON.stringify({ name }) });
+    roleModal.hide();
+    await loadRoles();
+    showAlert(`Created role "${name}"`, 'success');
+  } catch (e) {
+    document.getElementById('role-modal-error').textContent = e.message;
+    document.getElementById('role-modal-error').style.display = '';
+  }
+}
+
 // ── Prefixes ──────────────────────────────────────────────────
 async function loadPrefixes() {
   try {
     const data = await apiFetch(`${API}/prefixes/`);
-    document.getElementById('prefix-count').textContent = `${data.count} prefix${data.count !== 1 ? 'es' : ''}`;
+    document.getElementById('prefix-count').textContent =
+      `${data.count} prefix${data.count !== 1 ? 'es' : ''}`;
     const tbody = document.getElementById('prefix-tbody');
     tbody.innerHTML = '';
     data.results.forEach(p => {
@@ -165,7 +263,7 @@ async function loadPrefixes() {
         <td><code>${p.prefix}</code></td>
         <td>${familyBadge(p.family)}</td>
         <td>${statusBadge(p.status)}</td>
-        <td>${p.role ?? ''}</td>
+        <td>${p.role ? `<span class="badge bg-secondary">${p.role.name}</span>` : ''}</td>
         <td>${p.description}</td>
         <td>
           <button class="btn btn-outline-info action-btn me-1"
@@ -176,9 +274,7 @@ async function loadPrefixes() {
             onclick="deletePrefix(${p.id})">Delete</button>
         </td>`;
       tbody.appendChild(tr);
-      if (expandedRows.has(p.id)) {
-        insertAvailableIPsRow(p.id, p.prefix);
-      }
+      if (expandedRows.has(p.id)) insertAvailableIPsRow(p.id, p.prefix);
     });
   } catch (e) {
     showAlert('Failed to load prefixes: ' + e.message);
@@ -187,11 +283,7 @@ async function loadPrefixes() {
 
 async function toggleAvailableIPs(prefixId, prefix) {
   const existingRow = document.getElementById(`avail-row-${prefixId}`);
-  if (existingRow) {
-    existingRow.remove();
-    expandedRows.delete(prefixId);
-    return;
-  }
+  if (existingRow) { existingRow.remove(); expandedRows.delete(prefixId); return; }
   expandedRows.add(prefixId);
   await insertAvailableIPsRow(prefixId, prefix);
 }
@@ -202,10 +294,7 @@ async function insertAvailableIPsRow(prefixId, prefix) {
   let ips;
   try {
     ips = await apiFetch(`${API}/prefixes/${prefixId}/available-ips/`);
-  } catch (e) {
-    showAlert('Failed to load available IPs: ' + e.message);
-    return;
-  }
+  } catch (e) { showAlert('Failed to load available IPs: ' + e.message); return; }
   const tr = document.createElement('tr');
   tr.id = `avail-row-${prefixId}`;
   tr.className = 'available-ips-row';
@@ -222,9 +311,7 @@ async function allocateIP(prefixId) {
     showAlert(`Allocated ${ip.address}`, 'success');
     await loadPrefixes();
     await loadAddresses();
-  } catch (e) {
-    showAlert('Failed to allocate IP: ' + e.message);
-  }
+  } catch (e) { showAlert('Failed to allocate IP: ' + e.message); }
 }
 
 async function deletePrefix(prefixId) {
@@ -233,15 +320,14 @@ async function deletePrefix(prefixId) {
     await apiFetch(`${API}/prefixes/${prefixId}/`, { method: 'DELETE' });
     expandedRows.delete(prefixId);
     await loadPrefixes();
-  } catch (e) {
-    showAlert('Failed to delete prefix: ' + e.message);
-  }
+  } catch (e) { showAlert('Failed to delete prefix: ' + e.message); }
 }
 
-function openNewPrefixModal() {
+async function openNewPrefixModal() {
+  await loadRoles();
   document.getElementById('new-prefix').value = '';
   document.getElementById('new-status').value = 'active';
-  document.getElementById('new-role').value = '';
+  document.getElementById('new-role-id').value = '';
   document.getElementById('new-description').value = '';
   document.getElementById('modal-error').style.display = 'none';
   prefixModal.show();
@@ -254,10 +340,11 @@ async function createPrefix() {
     document.getElementById('modal-error').style.display = '';
     return;
   }
+  const roleVal = document.getElementById('new-role-id').value;
   const body = {
     prefix,
     status: document.getElementById('new-status').value,
-    role: document.getElementById('new-role').value || null,
+    role_id: roleVal ? parseInt(roleVal) : null,
     description: document.getElementById('new-description').value || null,
   };
   try {
@@ -275,7 +362,8 @@ async function createPrefix() {
 async function loadAddresses() {
   try {
     const data = await apiFetch(`${API}/ip-addresses/`);
-    document.getElementById('address-count').textContent = `${data.count} address${data.count !== 1 ? 'es' : ''}`;
+    document.getElementById('address-count').textContent =
+      `${data.count} address${data.count !== 1 ? 'es' : ''}`;
     const tbody = document.getElementById('address-tbody');
     tbody.innerHTML = '';
     data.results.forEach(ip => {
@@ -285,7 +373,7 @@ async function loadAddresses() {
         <td><code>${ip.address}</code></td>
         <td>${familyBadge(ip.family)}</td>
         <td>${statusBadge(ip.status)}</td>
-        <td>${ip.role ?? ''}</td>
+        <td>${ip.role ? `<span class="badge bg-secondary">${ip.role.label}</span>` : ''}</td>
         <td>${ip.dns_name}</td>
         <td>${ip.description}</td>
         <td>
@@ -294,9 +382,7 @@ async function loadAddresses() {
         </td>`;
       tbody.appendChild(tr);
     });
-  } catch (e) {
-    showAlert('Failed to load IP addresses: ' + e.message);
-  }
+  } catch (e) { showAlert('Failed to load IP addresses: ' + e.message); }
 }
 
 async function deleteAddress(ipId, address) {
@@ -305,20 +391,23 @@ async function deleteAddress(ipId, address) {
     await apiFetch(`${API}/ip-addresses/${ipId}/`, { method: 'DELETE' });
     await loadAddresses();
     await loadPrefixes();
-  } catch (e) {
-    showAlert('Failed to delete IP address: ' + e.message);
-  }
+  } catch (e) { showAlert('Failed to delete IP address: ' + e.message); }
 }
 
-// ── Bootstrap enter-key on modal ──────────────────────────────
+// ── Enter-key shortcuts ────────────────────────────────────────
 document.getElementById('new-prefix').addEventListener('keydown', e => {
   if (e.key === 'Enter') createPrefix();
+});
+document.getElementById('new-role-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') createRole();
 });
 
 // ── Init ──────────────────────────────────────────────────────
 prefixModal = new bootstrap.Modal(document.getElementById('newPrefixModal'));
+roleModal   = new bootstrap.Modal(document.getElementById('newRoleModal'));
 loadPrefixes();
 loadAddresses();
+loadRoles();
 </script>
 </body>
 </html>

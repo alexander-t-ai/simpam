@@ -1,0 +1,26 @@
+from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
+from app.db.models import Role
+
+
+class RoleService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_roles(self) -> list[Role]:
+        return self.db.query(Role).order_by(Role.name).all()
+
+    def create_role(self, name: str) -> Role:
+        if self.db.query(Role).filter(Role.name == name).first():
+            raise HTTPException(status_code=400, detail="Role already exists")
+        obj = Role(name=name)
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+
+def get_role_service(db: Session = Depends(get_db)) -> RoleService:
+    return RoleService(db)

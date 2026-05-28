@@ -1,5 +1,4 @@
 """Integration tests for IP address endpoints."""
-import pytest
 import requests
 
 BASE_URL = "http://localhost:8000/api/v1"
@@ -9,7 +8,7 @@ PREFIXES_URL = f"{IPAM_URL}/prefixes"
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Helpers
 # ---------------------------------------------------------------------------
 
 def create_ip(address: str, **kwargs) -> dict:
@@ -31,6 +30,7 @@ def test_create_and_get_ip():
     assert created["family"]["value"] == 4
     assert created["status"]["value"] == "active"
     assert created["description"] == "test host"
+    assert created["role"] is None
 
     get_resp = requests.get(f"{IPS_URL}/{ip_id}/")
     assert get_resp.status_code == 200
@@ -54,10 +54,8 @@ def test_patch_ip_description():
     assert patch_resp.status_code == 200
     patched = patch_resp.json()
     assert patched["description"] == "updated description"
-    # Address unchanged
     assert patched["address"] == "10.0.0.5/24"
 
-    # Verify via GET
     get_resp = requests.get(f"{IPS_URL}/{ip_id}/").json()
     assert get_resp["description"] == "updated description"
 
@@ -86,7 +84,6 @@ def test_filter_by_address():
     create_ip("10.1.1.2/24")
     create_ip("10.2.2.1/16")
 
-    # Filter by address only
     resp = requests.get(f"{IPS_URL}/", params={"address": "10.1.1.1"})
     assert resp.status_code == 200
     data = resp.json()
@@ -109,7 +106,7 @@ def test_filter_by_mask_length():
 
 def test_filter_by_address_and_mask_length():
     create_ip("10.1.1.1/24")
-    create_ip("10.1.1.1/16")  # same host, different prefix
+    create_ip("10.1.1.1/16")
 
     resp = requests.get(f"{IPS_URL}/", params={"address": "10.1.1.1", "mask_length": 24})
     assert resp.status_code == 200
@@ -119,11 +116,10 @@ def test_filter_by_address_and_mask_length():
 
 
 # ---------------------------------------------------------------------------
-# Test 5: Allocate IP via prefix, verify correct address and fields
+# Test 5: Allocate IP via prefix
 # ---------------------------------------------------------------------------
 
 def test_allocate_ip_via_prefix():
-    # Create a /30: usable hosts are .1 and .2
     prefix_resp = requests.post(f"{PREFIXES_URL}/", json={"prefix": "172.16.0.0/30"})
     assert prefix_resp.status_code == 201
     prefix_id = prefix_resp.json()["id"]
@@ -132,14 +128,12 @@ def test_allocate_ip_via_prefix():
     assert alloc_resp.status_code == 201
     allocated = alloc_resp.json()
 
-    # Should be the first usable host
     assert allocated["address"] == "172.16.0.1/30"
     assert allocated["family"]["value"] == 4
     assert allocated["status"]["value"] == "active"
     assert "id" in allocated
     assert allocated["id"] > 0
 
-    # The address should also appear in the ip-addresses list
     list_resp = requests.get(f"{IPS_URL}/").json()
     addresses = [r["address"] for r in list_resp["results"]]
     assert "172.16.0.1/30" in addresses
@@ -173,4 +167,26 @@ def test_patch_dns_name_and_role():
     assert patch_resp.status_code == 200
     patched = patch_resp.json()
     assert patched["dns_name"] == "host.example.com"
-    assert patched["role"] == "loopback"
+    assert patched["role"]["value"] == "loopback"
+    assert patched["role"]["label"] == "Loopback"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Create IP with role
+# ---------------------------------------------------------------------------
+
+def test_create_ip_with_role():
+    created = create_ip("10.88.0.1/24", role="vip")
+
+    assert created["role"] is not None
+    assert created["role"]["value"] == "vip"
+    assert created["role"]["label"] == "VIP"
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Invalid role rejected
+# ---------------------------------------------------------------------------
+
+def test_invalid_role_rejected():
+    resp = requests.post(f"{IPS_URL}/", json={"address": "10.77.0.1/24", "role": "management"})
+    assert resp.status_code == 422

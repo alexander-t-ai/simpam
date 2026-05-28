@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Any
-from pydantic import BaseModel, field_validator, model_validator
+
 import netaddr
+from pydantic import BaseModel, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -24,6 +25,39 @@ def _status_obj(value: str) -> dict:
     return {"value": value, "label": label_map.get(value, value.capitalize())}
 
 
+VALID_IP_ROLES = frozenset({"loopback", "secondary", "anycast", "vip", "vrrp", "hsrp", "glbp", "carp"})
+
+_IP_ROLE_LABELS = {
+    "loopback": "Loopback",
+    "secondary": "Secondary",
+    "anycast": "Anycast",
+    "vip": "VIP",
+    "vrrp": "VRRP",
+    "hsrp": "HSRP",
+    "glbp": "GLBP",
+    "carp": "CARP",
+}
+
+
+def _ip_role_obj(value: str) -> dict:
+    return {"value": value, "label": _IP_ROLE_LABELS.get(value, value.upper())}
+
+
+# ---------------------------------------------------------------------------
+# Role schemas
+# ---------------------------------------------------------------------------
+
+class RoleCreate(BaseModel):
+    name: str
+
+
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 # ---------------------------------------------------------------------------
 # Prefix schemas
 # ---------------------------------------------------------------------------
@@ -31,7 +65,7 @@ def _status_obj(value: str) -> dict:
 class PrefixCreate(BaseModel):
     prefix: str
     status: str = "active"
-    role: str | None = None
+    role_id: int | None = None
     description: str | None = None
 
     @field_validator("prefix")
@@ -49,7 +83,7 @@ class PrefixResponse(BaseModel):
     prefix: str
     family: dict[str, Any]
     status: dict[str, Any]
-    role: str | None
+    role: RoleResponse | None
     description: str
     created: datetime
     last_updated: datetime
@@ -63,7 +97,7 @@ class PrefixResponse(BaseModel):
             prefix=obj.prefix,
             family=_family_obj(obj.family),
             status=_status_obj(obj.status),
-            role=obj.role,
+            role=RoleResponse(id=obj.role.id, name=obj.role.name) if obj.role else None,
             description=obj.description or "",
             created=obj.created,
             last_updated=obj.last_updated,
@@ -113,6 +147,13 @@ class IPAddressCreate(BaseModel):
             raise ValueError(f"Invalid address: {v}") from exc
         return v
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str | None) -> str | None:
+        if v is not None and v.lower() not in VALID_IP_ROLES:
+            raise ValueError(f"Invalid role '{v}'. Must be one of: {', '.join(sorted(VALID_IP_ROLES))}")
+        return v.lower() if v is not None else None
+
 
 class IPAddressPatch(BaseModel):
     address: str | None = None
@@ -121,13 +162,20 @@ class IPAddressPatch(BaseModel):
     dns_name: str | None = None
     description: str | None = None
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str | None) -> str | None:
+        if v is not None and v.lower() not in VALID_IP_ROLES:
+            raise ValueError(f"Invalid role '{v}'. Must be one of: {', '.join(sorted(VALID_IP_ROLES))}")
+        return v.lower() if v is not None else None
+
 
 class IPAddressResponse(BaseModel):
     id: int
     address: str
     family: dict[str, Any]
     status: dict[str, Any]
-    role: str | None
+    role: dict[str, str] | None
     dns_name: str
     description: str
     created: datetime
@@ -142,7 +190,7 @@ class IPAddressResponse(BaseModel):
             address=obj.address,
             family=_family_obj(obj.family),
             status=_status_obj(obj.status),
-            role=obj.role,
+            role=_ip_role_obj(obj.role) if obj.role else None,
             dns_name=obj.dns_name or "",
             description=obj.description or "",
             created=obj.created,

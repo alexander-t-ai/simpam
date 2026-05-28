@@ -36,7 +36,7 @@ def create_prefix(
     obj = service.create_prefix(
         prefix=payload.prefix,
         status=payload.status,
-        role=payload.role,
+        role_id=payload.role_id,
         description=payload.description,
     )
     return PrefixResponse.from_orm_obj(obj)

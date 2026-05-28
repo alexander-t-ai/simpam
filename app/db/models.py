@@ -1,11 +1,20 @@
 from datetime import datetime, timezone
-from sqlalchemy import Integer, String, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.database import Base
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
 
 
 class Prefix(Base):
@@ -15,7 +24,8 @@ class Prefix(Base):
     prefix: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     family: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String, default="active", nullable=False)
-    role: Mapped[str | None] = mapped_column(String, nullable=True)
+    role_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("roles.id"), nullable=True)
+    role: Mapped["Role | None"] = relationship("Role", lazy="selectin")
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     created: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     last_updated: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)

@@ -4,8 +4,8 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from app.db.database import Base, engine
-from app.routers import ip_addresses, prefixes, reset
+from app.db.database import init_db
+from app.routers import ip_addresses, prefixes, reset, roles
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -20,7 +20,7 @@ logger = logging.getLogger("ipam")
 # ---------------------------------------------------------------------------
 # Database init
 # ---------------------------------------------------------------------------
-Base.metadata.create_all(bind=engine)
+init_db()
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -36,7 +36,13 @@ RESET_PREFIX = "/api/v1"
 
 app.include_router(prefixes.router, prefix=IPAM_PREFIX)
 app.include_router(ip_addresses.router, prefix=IPAM_PREFIX)
+app.include_router(roles.router, prefix=IPAM_PREFIX)
 app.include_router(reset.router, prefix=RESET_PREFIX)
+
+
+@app.get("/api/v1/status/", include_in_schema=False)
+def status():
+    return JSONResponse({"netbox-version": "Simpam 67"})
 
 
 @app.get("/ui", response_class=HTMLResponse, include_in_schema=False)

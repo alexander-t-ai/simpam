@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import IPAddress, Prefix
+from app.db.models import IPAddress, Prefix, Role
 
 
 class PrefixService:
@@ -22,7 +22,10 @@ class PrefixService:
     def list_prefixes(self, role: str | None, family: int | None) -> list[Prefix]:
         q = self.db.query(Prefix)
         if role is not None:
-            q = q.filter(Prefix.role == role)
+            role_obj = self.db.query(Role).filter(Role.name == role).first()
+            if role_obj is None:
+                raise HTTPException(status_code=400, detail=f"Role '{role}' not found")
+            q = q.filter(Prefix.role_id == role_obj.id)
         if family is not None:
             q = q.filter(Prefix.family == family)
         return q.all()
@@ -31,7 +34,7 @@ class PrefixService:
         self,
         prefix: str,
         status: str,
-        role: str | None,
+        role_id: int | None,
         description: str | None,
     ) -> Prefix:
         if self.db.query(Prefix).filter(Prefix.prefix == prefix).first():
@@ -41,7 +44,7 @@ class PrefixService:
             prefix=str(net),
             family=net.version,
             status=status,
-            role=role,
+            role_id=role_id,
             description=description,
         )
         self.db.add(obj)

@@ -1,22 +1,26 @@
 """Integration tests for prefix endpoints."""
-import ipaddress
-
-import pytest
 import requests
 
 BASE_URL = "http://localhost:8000/api/v1"
 IPAM_URL = f"{BASE_URL}/ipam"
 PREFIXES_URL = f"{IPAM_URL}/prefixes"
+ROLES_URL = f"{IPAM_URL}/roles"
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Helpers
 # ---------------------------------------------------------------------------
 
-def create_prefix(prefix: str, role: str | None = None, **kwargs) -> dict:
+def create_role(name: str) -> dict:
+    resp = requests.post(f"{ROLES_URL}/", json={"name": name})
+    assert resp.status_code == 201, f"Failed to create role: {resp.text}"
+    return resp.json()
+
+
+def create_prefix(prefix: str, role_id: int | None = None, **kwargs) -> dict:
     payload = {"prefix": prefix, **kwargs}
-    if role is not None:
-        payload["role"] = role
+    if role_id is not None:
+        payload["role_id"] = role_id
     resp = requests.post(f"{PREFIXES_URL}/", json=payload)
     assert resp.status_code == 201, f"Failed to create prefix: {resp.text}"
     return resp.json()
@@ -32,6 +36,7 @@ def test_create_and_list_prefix():
     assert created["id"] > 0
     assert created["family"]["value"] == 4
     assert created["status"]["value"] == "active"
+    assert created["role"] is None
 
     resp = requests.get(f"{PREFIXES_URL}/")
     assert resp.status_code == 200
@@ -54,14 +59,10 @@ def test_available_ips_excludes_network_broadcast():
 
     addresses = [entry["address"].split("/")[0] for entry in ips]
 
-    # Network address must not be present
     assert "192.168.1.0" not in addresses
-    # Broadcast address must not be present
     assert "192.168.1.255" not in addresses
-    # First and last usable hosts must be present
     assert "192.168.1.1" in addresses
     assert "192.168.1.254" in addresses
-    # Total usable hosts in /24 = 254
     assert len(ips) == 254
 
 
@@ -73,7 +74,6 @@ def test_allocate_ip_removes_from_available():
     created = create_prefix("10.1.0.0/30")
     prefix_id = created["id"]
 
-    # Available: .1 and .2 (network=.0, broadcast=.3)
     avail_before = requests.get(f"{PREFIXES_URL}/{prefix_id}/available-ips/").json()
     assert len(avail_before) == 2
 
@@ -109,16 +109,20 @@ def test_delete_prefix():
 # ---------------------------------------------------------------------------
 
 def test_filter_by_role():
-    create_prefix("10.10.0.0/24", role="production")
-    create_prefix("10.20.0.0/24", role="staging")
-    create_prefix("10.30.0.0/24", role="production")
+    prod = create_role("production")
+    staging = create_role("staging")
+
+    create_prefix("10.10.0.0/24", role_id=prod["id"])
+    create_prefix("10.20.0.0/24", role_id=staging["id"])
+    create_prefix("10.30.0.0/24", role_id=prod["id"])
 
     resp = requests.get(f"{PREFIXES_URL}/", params={"role": "production"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["count"] == 2
     for item in data["results"]:
-        assert item["role"] == "production"
+        assert item["role"]["name"] == "production"
+        assert item["role"]["id"] == prod["id"]
 
     resp2 = requests.get(f"{PREFIXES_URL}/", params={"role": "staging"})
     data2 = resp2.json()
@@ -156,11 +160,9 @@ def test_allocate_child_prefix():
     parent = create_prefix("10.0.0.0/24")
     prefix_id = parent["id"]
 
-    # List available prefixes — should contain the whole /24 at minimum
     avail = requests.get(f"{PREFIXES_URL}/{prefix_id}/available-prefixes/").json()
     assert len(avail) >= 1
 
-    # Allocate a /26 child
     alloc = requests.post(
         f"{PREFIXES_URL}/{prefix_id}/available-prefixes/",
         json={"prefix_length": 26},
@@ -170,12 +172,35 @@ def test_allocate_child_prefix():
     assert child["prefix"].endswith("/26")
     assert child["family"]["value"] == 4
 
-    # Verify it's in the DB as a listed prefix
     list_resp = requests.get(f"{PREFIXES_URL}/").json()
     prefixes_list = [p["prefix"] for p in list_resp["results"]]
     assert child["prefix"] in prefixes_list
 
-    # Available prefixes for parent should no longer include the allocated child fully
     avail_after = requests.get(f"{PREFIXES_URL}/{prefix_id}/available-prefixes/").json()
     avail_prefixes = [a["prefix"] for a in avail_after]
     assert child["prefix"] not in avail_prefixes
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Filter by nonexistent role returns 400
+# ---------------------------------------------------------------------------
+
+def test_filter_by_nonexistent_role():
+    resp = requests.get(f"{PREFIXES_URL}/", params={"role": "does-not-exist"})
+    assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Prefix with role shows role object in response
+# ---------------------------------------------------------------------------
+
+def test_prefix_role_response():
+    role = create_role("infra")
+    created = create_prefix("192.0.2.0/24", role_id=role["id"])
+
+    assert created["role"] is not None
+    assert created["role"]["id"] == role["id"]
+    assert created["role"]["name"] == "infra"
+
+    fetched = requests.get(f"{PREFIXES_URL}/{created['id']}/").json()
+    assert fetched["role"]["name"] == "infra"
