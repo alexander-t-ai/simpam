@@ -2,6 +2,7 @@
 import requests
 
 BASE_URL = "http://localhost:8000/api"
+RESET_URL = f"{BASE_URL}/reset"
 IPAM_URL = f"{BASE_URL}/ipam"
 IPS_URL = f"{IPAM_URL}/ip-addresses"
 PREFIXES_URL = f"{IPAM_URL}/prefixes"
@@ -190,3 +191,17 @@ def test_create_ip_with_role():
 def test_invalid_role_rejected():
     resp = requests.post(f"{IPS_URL}/", json={"address": "10.77.0.1/24", "role": "management"})
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Test 10: IDs restart from 1 after reset
+# ---------------------------------------------------------------------------
+
+def test_ids_restart_from_1_after_reset():
+    create_ip("10.50.0.1/24")
+    create_ip("10.50.0.2/24")
+
+    requests.post(f"{RESET_URL}/")
+
+    created = create_ip("10.50.0.3/24")
+    assert created["id"] == 1
