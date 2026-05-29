@@ -6,6 +6,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/data
+      - ipam_data:/data
       - ./initializers:/initializers
     restart: unless-stopped
+
+volumes:
+  ipam_data:
