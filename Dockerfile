@@ -14,8 +14,8 @@ RUN uv sync --no-dev
 # Copy application code
 COPY app/ ./app/
 
-# Create data directory
-RUN mkdir -p /data
+# Create data and initializers directories
+RUN mkdir -p /data /initializers
 
 EXPOSE 8000
 

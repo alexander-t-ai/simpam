@@ -49,11 +49,14 @@ def _ip_role_obj(value: str) -> dict:
 
 class RoleCreate(BaseModel):
     name: str
+    slug: str | None = None
+    description: str | None = None
 
 
 class RoleResponse(BaseModel):
     id: int
     name: str
+    description: str | None
 
     model_config = {"from_attributes": True}
 
@@ -97,7 +100,7 @@ class PrefixResponse(BaseModel):
             prefix=obj.prefix,
             family=_family_obj(obj.family),
             status=_status_obj(obj.status),
-            role=RoleResponse(id=obj.role.id, name=obj.role.name) if obj.role else None,
+            role=RoleResponse(id=obj.role.id, name=obj.role.name, description=obj.role.description) if obj.role else None,
             description=obj.description or "",
             created=obj.created,
             last_updated=obj.last_updated,

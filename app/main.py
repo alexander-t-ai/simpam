@@ -4,7 +4,8 @@ import time
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from app.db.database import init_db
+from app import initializer
+from app.db.database import SessionLocal, init_db
 from app.routers import ip_addresses, prefixes, reset, roles
 
 # ---------------------------------------------------------------------------
@@ -21,6 +22,8 @@ logger = logging.getLogger("ipam")
 # Database init
 # ---------------------------------------------------------------------------
 init_db()
+with SessionLocal() as _db:
+    initializer.run(_db)
 
 # ---------------------------------------------------------------------------
 # FastAPI app

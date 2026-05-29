@@ -38,10 +38,12 @@ def init_db() -> None:
     inspector = inspect(engine)
     existing = set(inspector.get_table_names())
     ip_cols = {c["name"] for c in inspector.get_columns("ip_addresses")} if "ip_addresses" in existing else set()
+    role_cols = {c["name"] for c in inspector.get_columns("roles")} if "roles" in existing else set()
     needs_migration = (
         "roles" not in existing
         or ("prefixes" in existing and "role_id" not in {c["name"] for c in inspector.get_columns("prefixes")})
         or ("ip_addresses" in existing and "role_id" in ip_cols)
+        or ("roles" in existing and "description" not in role_cols)
     )
     if needs_migration:
         Base.metadata.drop_all(bind=engine)

@@ -12,10 +12,10 @@ class RoleService:
     def list_roles(self) -> list[Role]:
         return self.db.query(Role).order_by(Role.name).all()
 
-    def create_role(self, name: str) -> Role:
+    def create_role(self, name: str, description: str | None = None) -> Role:
         if self.db.query(Role).filter(Role.name == name).first():
             raise HTTPException(status_code=400, detail="Role already exists")
-        obj = Role(name=name)
+        obj = Role(name=name, description=description)
         self.db.add(obj)
         self.db.commit()
         self.db.refresh(obj)

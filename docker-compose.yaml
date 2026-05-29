@@ -7,4 +7,5 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/data
+      - ./initializers:/initializers
     restart: unless-stopped
