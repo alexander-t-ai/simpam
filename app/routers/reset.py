@@ -18,6 +18,7 @@ _ENTITY_MAP = {
 
 def _truncate(db: Session, model) -> None:
     db.query(model).delete()
+    db.execute(text("CREATE TABLE IF NOT EXISTS sqlite_sequence(name, seq)"))
     db.execute(text(f"DELETE FROM sqlite_sequence WHERE name = '{model.__tablename__}'"))
 
 
