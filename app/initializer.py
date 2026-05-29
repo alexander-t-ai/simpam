@@ -17,10 +17,10 @@ class InitializerLoader:
         self.initializers_dir = initializers_dir
 
     def run(self) -> None:
-        self._load_roles()
-        self._load_prefixes()
+        self.load_roles()
+        self.load_prefixes()
 
-    def _load_roles(self) -> None:
+    def load_roles(self) -> None:
         path = os.path.join(self.initializers_dir, "prefix_vlan_roles.yml")
         try:
             with open(path) as f:
@@ -39,7 +39,7 @@ class InitializerLoader:
 
         self.db.commit()
 
-    def _load_prefixes(self) -> None:
+    def load_prefixes(self) -> None:
         path = os.path.join(self.initializers_dir, "prefixes.yml")
         try:
             with open(path) as f:
