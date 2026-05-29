@@ -14,23 +14,23 @@ class IPAddressService:
         self.db = db
 
     def get_ip_address(self, ip_id: int) -> IPAddress:
-        obj = self.db.query(IPAddress).filter(IPAddress.id == ip_id).first()
-        if not obj:
+        ip_address = self.db.query(IPAddress).filter(IPAddress.id == ip_id).first()
+        if not ip_address:
             raise NotFoundException(f"IP address {ip_id} not found")
-        return obj
+        return ip_address
 
     def list_ip_addresses(self, address: str | None = None, mask_length: int | None = None) -> list[IPAddress]:
         if address is None and mask_length is None:
             return self.db.query(IPAddress).all()
         results = []
-        for record in self.db.query(IPAddress).all():
+        for ip_address in self.db.query(IPAddress).all():
             try:
-                stored = netaddr.IPNetwork(record.address)
+                stored = netaddr.IPNetwork(ip_address.address)
                 if address is not None and str(stored.ip) != address:
                     continue
                 if mask_length is not None and stored.prefixlen != mask_length:
                     continue
-                results.append(record)
+                results.append(ip_address)
             except netaddr.AddrFormatError:
                 pass
         return results
@@ -39,7 +39,7 @@ class IPAddressService:
         if self.db.query(IPAddress).filter(IPAddress.address == address).first():
             raise AlreadyExistsException("IP address already exists")
         net = netaddr.IPNetwork(address)
-        obj = IPAddress(
+        ip_address = IPAddress(
             address=address,
             family=net.version,
             status=status,
@@ -47,13 +47,13 @@ class IPAddressService:
             dns_name=dns_name,
             description=description,
         )
-        self.db.add(obj)
+        self.db.add(ip_address)
         self.db.commit()
-        self.db.refresh(obj)
-        return obj
+        self.db.refresh(ip_address)
+        return ip_address
 
     def patch_ip_address(self, ip_id: int, update_data: dict) -> IPAddress:
-        obj = self.get_ip_address(ip_id)
+        ip_address = self.get_ip_address(ip_id)
         for field, value in update_data.items():
             if field == "address":
                 if value is None:
@@ -62,16 +62,16 @@ class IPAddressService:
                     net = netaddr.IPNetwork(value)
                 except (netaddr.AddrFormatError, ValueError) as exc:
                     raise ValueError(f"Invalid address: {value}") from exc
-                obj.family = net.version
-            setattr(obj, field, value)
-        obj.last_updated = datetime.now(timezone.utc)
+                ip_address.family = net.version
+            setattr(ip_address, field, value)
+        ip_address.last_updated = datetime.now(timezone.utc)
         self.db.commit()
-        self.db.refresh(obj)
-        return obj
+        self.db.refresh(ip_address)
+        return ip_address
 
     def delete_ip_address(self, ip_id: int) -> None:
-        obj = self.get_ip_address(ip_id)
-        self.db.delete(obj)
+        ip_address = self.get_ip_address(ip_id)
+        self.db.delete(ip_address)
         self.db.commit()
 
 

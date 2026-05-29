@@ -21,10 +21,10 @@ def list_prefixes(
     family: int | None = None,
     service: PrefixService = Depends(get_prefix_service),
 ):
-    items = service.list_prefixes(role=role, family=family)
+    prefixes = service.list_prefixes(role_name=role, family=family)
     return PrefixListResponse(
-        count=len(items),
-        results=[PrefixResponse.from_orm_obj(p) for p in items],
+        count=len(prefixes),
+        results=[PrefixResponse.from_orm_obj(prefix) for prefix in prefixes],
     )
 
 
@@ -33,13 +33,13 @@ def create_prefix(
     payload: PrefixCreate,
     service: PrefixService = Depends(get_prefix_service),
 ):
-    obj = service.create_prefix(
+    prefix = service.create_prefix(
         prefix=payload.prefix,
         status=payload.status,
         role_id=payload.role_id,
         description=payload.description,
     )
-    return PrefixResponse.from_orm_obj(obj)
+    return PrefixResponse.from_orm_obj(prefix)
 
 
 @router.get("/{prefix_id}/", response_model=PrefixResponse)

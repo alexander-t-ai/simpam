@@ -8,10 +8,10 @@ router = APIRouter(prefix="/roles", tags=["roles"])
 
 @router.get("/", response_model=list[RoleResponse])
 def list_roles(service: RoleService = Depends(get_role_service)):
-    return [RoleResponse(id=r.id, name=r.name, description=r.description) for r in service.list_roles()]
+    return [RoleResponse(id=role.id, name=role.name, description=role.description) for role in service.list_roles()]
 
 
 @router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 def create_role(payload: RoleCreate, service: RoleService = Depends(get_role_service)):
-    r = service.create_role(name=payload.name, description=payload.description)
-    return RoleResponse(id=r.id, name=r.name, description=r.description)
+    role = service.create_role(name=payload.name, description=payload.description)
+    return RoleResponse(id=role.id, name=role.name, description=role.description)

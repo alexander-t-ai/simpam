@@ -16,11 +16,11 @@ class RoleService:
     def create_role(self, name: str, description: str | None = None) -> Role:
         if self.db.query(Role).filter(Role.name == name).first():
             raise AlreadyExistsException("Role already exists")
-        obj = Role(name=name, description=description)
-        self.db.add(obj)
+        role = Role(name=name, description=description)
+        self.db.add(role)
         self.db.commit()
-        self.db.refresh(obj)
-        return obj
+        self.db.refresh(role)
+        return role
 
 
 def get_role_service(db: Session = Depends(get_db)) -> RoleService:

@@ -17,10 +17,10 @@ def list_ip_addresses(
     mask_length: int | None = None,
     service: IPAddressService = Depends(get_ip_address_service),
 ):
-    items = service.list_ip_addresses(address=address, mask_length=mask_length)
+    ip_addresses = service.list_ip_addresses(address=address, mask_length=mask_length)
     return IPAddressListResponse(
-        count=len(items),
-        results=[IPAddressResponse.from_orm_obj(r) for r in items],
+        count=len(ip_addresses),
+        results=[IPAddressResponse.from_orm_obj(ip_address) for ip_address in ip_addresses],
     )
 
 
@@ -29,14 +29,14 @@ def create_ip_address(
     payload: IPAddressCreate,
     service: IPAddressService = Depends(get_ip_address_service),
 ):
-    obj = service.create_ip_address(
+    ip_address = service.create_ip_address(
         address=payload.address,
         status=payload.status,
         role=payload.role,
         dns_name=payload.dns_name,
         description=payload.description,
     )
-    return IPAddressResponse.from_orm_obj(obj)
+    return IPAddressResponse.from_orm_obj(ip_address)
 
 
 @router.get("/{ip_id}/", response_model=IPAddressResponse)
