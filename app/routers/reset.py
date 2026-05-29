@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -13,6 +14,11 @@ _ENTITY_MAP = {
 }
 
 
+def _truncate(db: Session, model) -> None:
+    db.query(model).delete()
+    db.execute(text(f"DELETE FROM sqlite_sequence WHERE name = '{model.__tablename__}'"))
+
+
 @router.post("/reset/", status_code=204)
 def reset_database(entity: str | None = None, db: Session = Depends(get_db)):
     """Truncate tables. Pass ?entity=<ip-address|prefix|role> to clear one entity, or omit to clear all."""
@@ -21,9 +27,9 @@ def reset_database(entity: str | None = None, db: Session = Depends(get_db)):
         if models is None:
             raise HTTPException(status_code=400, detail=f"Unknown entity '{entity}'. Must be one of: {', '.join(_ENTITY_MAP)}")
         for model in models:
-            db.query(model).delete()
+            _truncate(db, model)
     else:
-        db.query(IPAddress).delete()
-        db.query(Prefix).delete()
-        db.query(Role).delete()
+        _truncate(db, IPAddress)
+        _truncate(db, Prefix)
+        _truncate(db, Role)
     db.commit()
