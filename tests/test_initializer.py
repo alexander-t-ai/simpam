@@ -5,7 +5,7 @@ import tempfile
 import pytest
 import yaml
 
-from app import initializer
+from app.initializer import InitializerLoader
 from app.db.database import SessionLocal, init_db
 from app.db.models import Prefix, Role
 
@@ -21,9 +21,8 @@ def clean_db():
 
 
 @pytest.fixture
-def tmp_init_dir(monkeypatch):
+def tmp_init_dir():
     with tempfile.TemporaryDirectory() as d:
-        monkeypatch.setattr(initializer, "INITIALIZERS_DIR", d)
         yield d
 
 
@@ -39,7 +38,7 @@ def test_load_roles(tmp_init_dir):
     ])
 
     with SessionLocal() as db:
-        initializer.run(db)
+        InitializerLoader(db, tmp_init_dir).run()
         roles = db.query(Role).order_by(Role.name).all()
 
     assert len(roles) == 2
@@ -55,8 +54,8 @@ def test_load_roles_skips_duplicates(tmp_init_dir):
     ])
 
     with SessionLocal() as db:
-        initializer.run(db)
-        initializer.run(db)  # second run should not duplicate
+        InitializerLoader(db, tmp_init_dir).run()
+        InitializerLoader(db, tmp_init_dir).run()  # second run should not duplicate
         count = db.query(Role).count()
 
     assert count == 1
@@ -72,7 +71,7 @@ def test_load_prefixes(tmp_init_dir):
     ])
 
     with SessionLocal() as db:
-        initializer.run(db)
+        InitializerLoader(db, tmp_init_dir).run()
         prefixes = db.query(Prefix).order_by(Prefix.prefix).all()
         infra_role = db.query(Role).filter(Role.name == "infra").first()
 
@@ -92,8 +91,8 @@ def test_load_prefixes_skips_duplicates(tmp_init_dir):
     ])
 
     with SessionLocal() as db:
-        initializer.run(db)
-        initializer.run(db)
+        InitializerLoader(db, tmp_init_dir).run()
+        InitializerLoader(db, tmp_init_dir).run()
         count = db.query(Prefix).count()
 
     assert count == 1
@@ -101,7 +100,7 @@ def test_load_prefixes_skips_duplicates(tmp_init_dir):
 
 def test_missing_files_are_ignored(tmp_init_dir):
     with SessionLocal() as db:
-        initializer.run(db)  # no files present — should not raise
+        InitializerLoader(db, tmp_init_dir).run()  # no files present — should not raise
         assert db.query(Role).count() == 0
         assert db.query(Prefix).count() == 0
 
@@ -112,7 +111,7 @@ def test_prefix_with_unknown_role_still_created(tmp_init_dir):
     ])
 
     with SessionLocal() as db:
-        initializer.run(db)
+        InitializerLoader(db, tmp_init_dir).run()
         p = db.query(Prefix).first()
 
     assert p is not None

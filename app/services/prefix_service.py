@@ -1,12 +1,11 @@
-from datetime import datetime, timezone
-
 import netaddr
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import IPAddress, Prefix, Role
+from app.exceptions import AlreadyExistsException, ConflictException, NotFoundException
 
 
 class PrefixService:
@@ -16,7 +15,7 @@ class PrefixService:
     def get_prefix(self, prefix_id: int) -> Prefix:
         obj = self.db.query(Prefix).filter(Prefix.id == prefix_id).first()
         if not obj:
-            raise HTTPException(status_code=404, detail=f"Prefix {prefix_id} not found")
+            raise NotFoundException(f"Prefix {prefix_id} not found")
         return obj
 
     def list_prefixes(self, role: str | None, family: int | None) -> list[Prefix]:
@@ -24,21 +23,15 @@ class PrefixService:
         if role is not None:
             role_obj = self.db.query(Role).filter(Role.name == role).first()
             if role_obj is None:
-                raise HTTPException(status_code=400, detail=f"Role '{role}' not found")
+                raise ValueError(f"Role '{role}' not found")
             q = q.filter(Prefix.role_id == role_obj.id)
         if family is not None:
             q = q.filter(Prefix.family == family)
         return q.all()
 
-    def create_prefix(
-        self,
-        prefix: str,
-        status: str,
-        role_id: int | None,
-        description: str | None,
-    ) -> Prefix:
+    def create_prefix(self, prefix: str, status: str, role_id: int | None, description: str | None) -> Prefix:
         if self.db.query(Prefix).filter(Prefix.prefix == prefix).first():
-            raise HTTPException(status_code=400, detail="Prefix already exists")
+            raise AlreadyExistsException("Prefix already exists")
         net = netaddr.IPNetwork(prefix)
         obj = Prefix(
             prefix=str(net),
@@ -57,9 +50,7 @@ class PrefixService:
         self.db.delete(obj)
         self.db.commit()
 
-    def get_available_ips(
-        self, prefix_id: int
-    ) -> tuple[netaddr.IPNetwork, list[netaddr.IPAddress]]:
+    def get_available_ips(self, prefix_id: int) -> tuple[netaddr.IPNetwork, list[netaddr.IPAddress]]:
         obj = self.get_prefix(prefix_id)
         net = netaddr.IPNetwork(obj.prefix)
         allocated = self._allocated_ips_in_prefix(net)
@@ -68,27 +59,19 @@ class PrefixService:
 
     def allocate_ip(self, prefix_id: int) -> IPAddress:
         net, available = self.get_available_ips(prefix_id)
-
         if not available:
-            raise HTTPException(status_code=409, detail="No available IPs in prefix")
-
-        ip_obj = IPAddress(
-            address=f"{available[0]}/{net.prefixlen}",
-            family=net.version,
-            status="active",
-        )
+            raise ConflictException("No available IPs in prefix")
+        ip_obj = IPAddress(address=f"{available[0]}/{net.prefixlen}", family=net.version, status="active")
         try:
             self.db.add(ip_obj)
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
-            raise HTTPException(status_code=409, detail="Address already allocated")
+            raise ConflictException("Address already allocated")
         self.db.refresh(ip_obj)
         return ip_obj
 
-    def get_available_prefixes(
-        self, prefix_id: int
-    ) -> tuple[netaddr.IPNetwork, list[netaddr.IPNetwork]]:
+    def get_available_prefixes(self, prefix_id: int) -> tuple[netaddr.IPNetwork, list[netaddr.IPNetwork]]:
         obj = self.get_prefix(prefix_id)
         net = netaddr.IPNetwork(obj.prefix)
         return net, _available_subnets(net, self._child_prefixes(net))
@@ -98,12 +81,9 @@ class PrefixService:
         net = netaddr.IPNetwork(obj.prefix)
 
         if prefix_length <= net.prefixlen:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Requested prefix_length {prefix_length} must be greater than parent prefix length {net.prefixlen}",
-            )
+            raise ValueError(f"Requested prefix_length {prefix_length} must be greater than parent prefix length {net.prefixlen}")
         if prefix_length > (32 if net.version == 4 else 128):
-            raise HTTPException(status_code=400, detail="Invalid prefix_length")
+            raise ValueError("Invalid prefix_length")
 
         available_blocks = _available_subnets(net, self._child_prefixes(net))
         chosen = None
@@ -115,7 +95,7 @@ class PrefixService:
                     break
 
         if chosen is None:
-            raise HTTPException(status_code=409, detail="No available prefix of requested size")
+            raise ConflictException("No available prefix of requested size")
 
         new_prefix = Prefix(prefix=str(chosen.cidr), family=net.version, status=status, description=description)
         try:
@@ -123,7 +103,7 @@ class PrefixService:
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
-            raise HTTPException(status_code=409, detail="Prefix already exists")
+            raise ConflictException("Prefix already exists")
         self.db.refresh(new_prefix)
         return new_prefix
 
@@ -175,9 +155,7 @@ def _usable_hosts(net: netaddr.IPNetwork) -> list[netaddr.IPAddress]:
         return list(net.iter_hosts())
 
 
-def _available_subnets(
-    parent: netaddr.IPNetwork, children: list[netaddr.IPNetwork]
-) -> list[netaddr.IPNetwork]:
+def _available_subnets(parent: netaddr.IPNetwork, children: list[netaddr.IPNetwork]) -> list[netaddr.IPNetwork]:
     if not children:
         return [parent]
     remaining = [parent]

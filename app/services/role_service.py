@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import Role
+from app.exceptions import AlreadyExistsException
 
 
 class RoleService:
@@ -14,7 +15,7 @@ class RoleService:
 
     def create_role(self, name: str, description: str | None = None) -> Role:
         if self.db.query(Role).filter(Role.name == name).first():
-            raise HTTPException(status_code=400, detail="Role already exists")
+            raise AlreadyExistsException("Role already exists")
         obj = Role(name=name, description=description)
         self.db.add(obj)
         self.db.commit()

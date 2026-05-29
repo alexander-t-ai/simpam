@@ -6,6 +6,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from app import initializer
 from app.db.database import SessionLocal, init_db
+from app.exceptions import AlreadyExistsException, ConflictException, NotFoundException
+from app.initializer import InitializerLoader
 from app.routers import ip_addresses, prefixes, reset, roles
 
 # ---------------------------------------------------------------------------
@@ -23,7 +25,7 @@ logger = logging.getLogger("ipam")
 # ---------------------------------------------------------------------------
 init_db()
 with SessionLocal() as _db:
-    initializer.run(_db)
+    InitializerLoader(_db).run()
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -41,6 +43,26 @@ app.include_router(prefixes.router, prefix=IPAM_PREFIX)
 app.include_router(ip_addresses.router, prefix=IPAM_PREFIX)
 app.include_router(roles.router, prefix=IPAM_PREFIX)
 app.include_router(reset.router, prefix=RESET_PREFIX)
+
+
+@app.exception_handler(NotFoundException)
+async def not_found_handler(request: Request, exc: NotFoundException):
+    return JSONResponse(status_code=404, content={"detail": exc.detail})
+
+
+@app.exception_handler(AlreadyExistsException)
+async def already_exists_handler(request: Request, exc: AlreadyExistsException):
+    return JSONResponse(status_code=400, content={"detail": exc.detail})
+
+
+@app.exception_handler(ConflictException)
+async def conflict_handler(request: Request, exc: ConflictException):
+    return JSONResponse(status_code=409, content={"detail": exc.detail})
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.get("/api/ipam/", include_in_schema=False)
