@@ -89,9 +89,8 @@ class PrefixService:
         chosen = None
         for block in sorted(available_blocks, key=lambda x: x.network):
             if block.prefixlen <= prefix_length:
-                subnets = list(block.subnet(prefix_length))
-                if subnets:
-                    chosen = subnets[0]
+                chosen = next(block.subnet(prefix_length), None)
+                if chosen:
                     break
 
         if chosen is None:

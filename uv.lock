@@ -291,6 +291,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "httpx" },
+    { name = "mockito" },
     { name = "pytest" },
     { name = "requests" },
 ]
@@ -308,8 +309,18 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "mockito", specifier = ">=2.0.4" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
+]
+
+[[package]]
+name = "mockito"
+version = "2.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c8/8e/eff6dfa2c597ddc09d2c83a922f5154f00fa8bda90f68eda984a6d7506bd/mockito-2.0.4.tar.gz", hash = "sha256:d341f228c5b5ccf3c473751f6c6f09d8d83c5da49846a6ee31eb60b65607e0ef", size = 218582, upload-time = "2026-04-15T09:23:47.927Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/01/70/625563b5925ee5393a971f4790aab4b0059deda3bf9196c57ba7172e9ab3/mockito-2.0.4-py3-none-any.whl", hash = "sha256:04d7e6e9b9b7288e76235b894f9b3cbfdc9cfc631e548ed607933146ae9db1f5", size = 51921, upload-time = "2026-04-15T09:23:46.68Z" },
 ]
 
 [[package]]
